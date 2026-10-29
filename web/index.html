@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Review and validate extracted invoice data">
+<title>Document Intelligence | Review workspace</title>
+<style>
+:root{color-scheme:light;--ink:#172033;--muted:#667085;--line:#dfe5ee;--surface:#fff;--canvas:#f5f7fb;--brand:#185abd;--brand-dark:#12458e;--focus:#8ab4f8;--success:#147a4b;--warning:#a25b00;--danger:#b42318;--shadow:0 10px 30px rgba(27,48,79,.08)}
+*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,textarea{font:inherit}
+button{border:0;border-radius:8px;cursor:pointer;font-weight:650;padding:10px 16px;transition:background .15s,box-shadow .15s,transform .15s}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+button.primary{background:var(--brand);color:#fff}button.primary:hover{background:var(--brand-dark)}button.secondary{background:#edf3fc;color:var(--brand)}button.ghost{background:transparent;color:var(--brand);padding:7px 10px}button:disabled{cursor:not-allowed;opacity:.55}
+a{color:var(--brand)}.sr-only{clip:rect(0 0 0 0);clip-path:inset(50%);height:1px;overflow:hidden;position:absolute;white-space:nowrap;width:1px}
+.app-shell{margin:auto;max-width:1180px;padding:32px 24px 56px}.topbar{align-items:flex-start;display:flex;gap:24px;justify-content:space-between;margin-bottom:28px}
+.eyebrow{color:var(--brand);font-size:12px;font-weight:750;letter-spacing:.1em;text-transform:uppercase}.topbar h1{font-size:clamp(28px,4vw,40px);letter-spacing:-.03em;line-height:1.1;margin:7px 0 8px}.subtitle{color:var(--muted);font-size:16px;margin:0}
+.panel{background:var(--surface);border:1px solid rgba(223,229,238,.8);border-radius:16px;box-shadow:var(--shadow);margin-top:20px;padding:24px}.panel-heading{align-items:flex-start;display:flex;gap:16px;justify-content:space-between;margin-bottom:18px}.panel h2{font-size:20px;margin:0 0 4px}.panel-heading p{color:var(--muted);margin:0}
+.upload-panel{background:linear-gradient(135deg,#fff 0%,#f0f6ff 100%);border-color:#cfe0fb}.upload-layout{align-items:center;display:flex;gap:18px;justify-content:space-between}.file-picker{align-items:center;background:#fff;border:1px dashed #9bb9e7;border-radius:12px;display:flex;flex:1;gap:12px;min-height:74px;padding:14px 16px}.file-picker input{max-width:100%}.file-help{color:var(--muted);font-size:13px;margin:8px 0 0}
+.notice{border-radius:8px;font-size:14px;margin:14px 0 0;padding:10px 12px}.notice[hidden]{display:none}.notice.info{background:#edf5ff;color:#174a88}.notice.success{background:#e9f8f0;color:#11633d}.notice.error{background:#fff0ee;color:#8f211a}
+.toolbar{align-items:end;display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:13px;font-weight:700}.search-field{flex:1;min-width:240px}.input{background:#fff;border:1px solid #bec9d8;border-radius:8px;color:var(--ink);min-height:42px;padding:9px 12px;width:100%}.input::placeholder{color:#8490a2}.toolbar-note{color:var(--muted);font-size:13px}
+.summary-grid{display:grid;gap:14px;grid-template-columns:repeat(4,1fr);margin-top:20px}.summary-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}.summary-label{color:var(--muted);font-size:13px}.summary-value{display:block;font-size:25px;font-weight:750;margin-top:3px}
+.table-wrap{overflow-x:auto}.results-table{border-collapse:collapse;min-width:650px;width:100%}.results-table caption{text-align:left}.results-table th{background:#f8fafc;color:#556276;font-size:12px;letter-spacing:.04em;text-align:left;text-transform:uppercase}.results-table td,.results-table th{border-bottom:1px solid var(--line);padding:14px 12px;vertical-align:middle}.results-table tbody tr:hover{background:#f8fbff}.results-table tbody tr.selected{background:#edf5ff}.document-link{font-weight:700;text-decoration:none}.document-link:hover{text-decoration:underline}.empty-state{color:var(--muted);padding:32px 12px;text-align:center}.status{border-radius:999px;display:inline-flex;font-size:12px;font-weight:700;padding:4px 9px}.status.completed{background:#e8f7ef;color:var(--success)}.status.processing,.status.queued{background:#fff5df;color:var(--warning)}.status.failed{background:#ffebe8;color:var(--danger)}.review-ok{color:var(--success);font-weight:700}.review-needed{color:var(--danger);font-weight:700}.progress-cell{min-width:130px}.mini-progress{background:#e5eaf2;border-radius:99px;height:6px;overflow:hidden}.mini-progress span{background:var(--brand);display:block;height:100%}.retry-button{color:var(--danger);font-size:12px;font-weight:700}
+.review-panel{scroll-margin-top:20px}.review-grid{display:grid;gap:24px;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr)}.review-header{align-items:flex-start;display:flex;gap:12px;justify-content:space-between;margin-bottom:18px}.review-title{margin:0}.review-meta{color:var(--muted);font-size:13px;margin:3px 0 0}.editor-label{display:block;font-size:13px;font-weight:700;margin-bottom:7px}.editor{background:#fbfcfe;border:1px solid #b9c5d5;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;line-height:1.55;min-height:360px;padding:14px;resize:vertical;width:100%}.review-actions{align-items:center;display:flex;gap:10px;margin-top:12px}.confidence{background:#f7f9fc;border:1px solid var(--line);border-radius:10px;margin-bottom:20px;padding:16px}.confidence-row{align-items:center;display:flex;justify-content:space-between}.confidence-value{font-size:24px;font-weight:750}.progress{background:#e5eaf2;border-radius:99px;height:8px;margin-top:10px;overflow:hidden}.progress-bar{background:var(--brand);height:100%;transition:width .2s}.error-list{list-style:none;margin:0;padding:0}.error-list li{border-left:3px solid var(--danger);background:#fff4f2;margin-bottom:9px;padding:10px 12px}.error-list strong{display:block;font-size:12px;letter-spacing:.04em;text-transform:uppercase}.no-errors{color:var(--success);margin:0}.details{color:var(--muted);font-size:13px;margin-top:20px}
+.compare-box{border-top:1px solid var(--line);margin-top:22px;padding-top:18px}.compare-controls{display:flex;gap:8px}.compare-controls select{flex:1}.compare-result{font-size:13px;margin-top:10px}
+@media(max-width:800px){.upload-layout,.topbar{align-items:stretch;flex-direction:column}.upload-layout .primary{width:100%}.summary-grid{grid-template-columns:repeat(2,1fr)}.review-grid{grid-template-columns:1fr}}
+@media(max-width:480px){.app-shell{padding:22px 14px 42px}.panel{padding:18px}.summary-grid{grid-template-columns:1fr 1fr}.summary-value{font-size:21px}.toolbar{align-items:stretch}.search-field{min-width:100%}.review-actions{align-items:stretch;flex-direction:column}.review-actions button{width:100%}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="app-shell">
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">Operations workspace</div>
+      <h1>Document Intelligence</h1>
+      <p class="subtitle">Extract, validate, and review invoice data in one place.</p>
+    </div>
+    <button class="ghost" id="refreshButton" type="button" aria-label="Refresh document list">↻ Refresh</button>
+  </header>
+
+  <section class="panel upload-panel" aria-labelledby="upload-heading">
+    <div class="panel-heading">
+      <div><h2 id="upload-heading">Upload documents</h2><p>Process multiple invoices, receipts, and spreadsheets at once.</p></div>
+    </div>
+    <div class="upload-layout">
+      <div class="file-picker">
+        <label for="files"><strong>Choose files</strong><span class="sr-only">Select documents to upload</span></label>
+        <input id="files" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.xlsx,.xls,.csv" aria-describedby="file-help">
+      </div>
+      <button class="primary" id="uploadButton" type="button">Upload documents</button>
+    </div>
+    <p class="file-help" id="file-help">Supported: PDF, JPG, PNG, TIFF, XLS, XLSX, and CSV. Maximum size is 25 MB per file.</p>
+    <div class="notice" id="message" role="status" aria-live="polite" hidden></div>
+  </section>
+
+  <section class="summary-grid" aria-label="Document summary">
+    <div class="summary-card"><span class="summary-label">Total documents</span><strong class="summary-value" id="totalCount">0</strong></div>
+    <div class="summary-card"><span class="summary-label">Completed</span><strong class="summary-value" id="completedCount">0</strong></div>
+    <div class="summary-card"><span class="summary-label">In progress</span><strong class="summary-value" id="processingCount">0</strong></div>
+    <div class="summary-card"><span class="summary-label">Needs review</span><strong class="summary-value" id="reviewCount">0</strong></div>
+  </section>
+
+  <section class="panel" aria-labelledby="documents-heading">
+    <div class="panel-heading">
+      <div><h2 id="documents-heading">Your documents</h2><p id="resultsDescription">Select a document to inspect extracted data.</p></div>
+    </div>
+    <div class="toolbar">
+      <div class="field search-field"><label for="search">Search documents</label><input class="input" id="search" type="search" placeholder="Filename, supplier, invoice number..." autocomplete="off"></div>
+      <span class="toolbar-note" id="lastUpdated" aria-live="polite"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="results-table">
+        <caption class="sr-only">Processed documents</caption>
+        <thead><tr><th scope="col">Document</th><th scope="col">Status</th><th scope="col">Progress</th><th scope="col">Invoice</th><th scope="col">Review</th></tr></thead>
+        <tbody id="rows"><tr><td class="empty-state" colspan="4">Loading documents…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel review-panel" id="detail" aria-labelledby="review-heading" hidden>
+    <div class="review-header">
+      <div><h2 class="review-title" id="review-heading">Review extracted invoice</h2><p class="review-meta" id="reviewMeta"></p></div>
+      <button class="ghost" id="closeReview" type="button">Close</button>
+    </div>
+    <div class="review-grid">
+      <div>
+        <label class="editor-label" for="invoice">Invoice JSON</label>
+        <textarea class="editor" id="invoice" spellcheck="false" aria-describedby="editor-help"></textarea>
+        <p class="details" id="editor-help">Edit values carefully, then save the corrected JSON. Unknown values should remain <code>null</code>.</p>
+        <div class="review-actions"><button class="primary" id="saveButton" type="button">Save correction</button><span class="toolbar-note" id="saveMessage" role="status" aria-live="polite"></span></div>
+      </div>
+      <aside aria-labelledby="validation-heading">
+        <h3 id="validation-heading">Validation results</h3>
+        <div class="confidence"><div class="confidence-row"><span>Extraction confidence</span><strong class="confidence-value" id="confidence">—</strong></div><div class="progress" aria-hidden="true"><div class="progress-bar" id="confidenceBar"></div></div></div>
+        <ul class="error-list" id="errors"></ul>
+        <div class="compare-box"><h3>Cross-document verification</h3><p class="details">Compare PDF-to-PDF or PDF-to-Excel invoice fields. The same workflow also supports other processed document pairs.</p><div class="compare-controls"><label class="sr-only" for="compareMode">Comparison type</label><select class="input" id="compareMode"><option value="pdf-pdf">PDF to PDF</option><option value="pdf-excel">PDF to Excel/CSV</option></select><label class="sr-only" for="compareSelect">Document to compare</label><select class="input" id="compareSelect"></select><button class="secondary" id="compareButton" type="button">Compare</button></div><div class="compare-result" id="compareResult" role="status" aria-live="polite"></div></div>
+      </aside>
+    </div>
+  </section>
+</main>
+<script>
+let selected=null, refreshTimer=null, currentDocuments=[];
+const $=selector=>document.querySelector(selector);
+const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+function setMessage(text,type='info'){const node=$('#message');node.textContent=text;node.className=`notice ${type}`;node.hidden=!text}
+function setSummary(data){$('#totalCount').textContent=data.length;$('#completedCount').textContent=data.filter(d=>d.status==='completed').length;$('#processingCount').textContent=data.filter(d=>['queued','processing'].includes(d.status)).length;$('#reviewCount').textContent=data.filter(d=>d.requires_review).length}
+async function load(){try{const query=encodeURIComponent($('#search').value.trim());const response=await fetch('/api/documents?q='+query);if(!response.ok)throw new Error('Unable to load documents');const data=await response.json();currentDocuments=data;setSummary(data);$('#lastUpdated').textContent=`Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;$('#resultsDescription').textContent=data.length?`${data.length} document${data.length===1?'':'s'} found.`:'No documents match your search.';$('#rows').innerHTML=data.length?data.map(d=>`<tr class="${d.id===selected?'selected':''}"><td><a class="document-link" href="#detail" data-document-id="${escapeHtml(d.id)}">${escapeHtml(d.filename)}</a></td><td><span class="status ${escapeHtml(d.status)}">${escapeHtml(d.status)}${d.stage&&d.status==='processing'?` · ${escapeHtml(d.stage)}`:''}</span></td><td class="progress-cell"><div class="mini-progress" role="progressbar" aria-valuenow="${d.progress||0}" aria-valuemin="0" aria-valuemax="100" aria-label="${d.progress||0}% processed"><span style="width:${d.progress||0}%"></span></div><small>${d.progress||0}%</small>${d.status==='failed'?` <button class="ghost retry-button" data-retry-id="${escapeHtml(d.id)}" type="button">Retry</button>`:''}</td><td>${escapeHtml(d.invoice?.invoice_number||'—')}</td><td class="${d.requires_review?'review-needed':'review-ok'}">${d.requires_review?'Needs review':'Ready'}</td></tr>`).join(''):'<tr><td class="empty-state" colspan="5">No documents found. Upload a document to get started.</td></tr>'}catch(error){setMessage(error.message,'error')}}
+async function upload(){const files=$('#files').files;if(!files.length){setMessage('Choose at least one document before uploading.','error');return}const button=$('#uploadButton');button.disabled=true;button.textContent='Uploading…';const form=new FormData();for(const file of files)form.append('files',file);try{const response=await fetch('/api/documents',{method:'POST',body:form});if(!response.ok)throw new Error((await response.json()).detail||'Upload failed');const data=await response.json();setMessage(`${data.documents.length} document${data.documents.length===1?'':'s'} queued for processing.`,'success');$('#files').value='';await load()}catch(error){setMessage(error.message,'error')}finally{button.disabled=false;button.textContent='Upload documents'}}
+async function show(id){try{const response=await fetch('/api/documents/'+encodeURIComponent(id));if(!response.ok)throw new Error('Unable to open document');const data=await response.json();selected=id;$('#detail').hidden=false;$('#invoice').value=JSON.stringify(data.invoice||{},null,2);$('#reviewMeta').textContent=`${data.document.filename} · ${data.document.status} · ${data.page_count||0} page/sheet(s)`;const confidence=Math.round((data.confidence??0)*100);$('#confidence').textContent=`${confidence}%`;$('#confidenceBar').style.width=`${confidence}%`;const errors=data.validation_errors||[];$('#errors').innerHTML=errors.length?errors.map(e=>`<li><strong>${escapeHtml(e.severity)}</strong>${escapeHtml(e.message)}</li>`).join(''):'<li class="no-errors">No validation issues found.</li>';$('#compareSelect').innerHTML=currentDocuments.filter(d=>d.id!==id&&d.status==='completed').map(d=>`<option value="${escapeHtml(d.id)}">${escapeHtml(d.filename)} (${escapeHtml(d.filename.split('.').pop().toUpperCase())})</option>`).join('');$('#compareResult').textContent='';document.querySelector('#detail').scrollIntoView({behavior:'smooth',block:'start'});await load()}catch(error){setMessage(error.message,'error')}}
+async function save(){if(!selected)return;const saveMessage=$('#saveMessage');try{const invoice=JSON.parse($('#invoice').value);const response=await fetch('/api/documents/'+encodeURIComponent(selected)+'/invoice',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({invoice})});if(!response.ok)throw new Error('The correction could not be saved.');saveMessage.textContent='Saved successfully.';setMessage('Correction saved.','success');await show(selected)}catch(error){saveMessage.textContent=error instanceof SyntaxError?'Invalid JSON. Please correct the format.':error.message;saveMessage.className='error'}}
+async function retry(id){const response=await fetch('/api/documents/'+encodeURIComponent(id)+'/reprocess',{method:'POST'});if(!response.ok)throw new Error('Retry could not be queued');setMessage('Document queued for reprocessing.','success');load()}
+async function compare(){const other=$('#compareSelect').value;if(!selected||!other){$('#compareResult').textContent='Choose another completed document first.';return}const source=currentDocuments.find(d=>d.id===selected);const target=currentDocuments.find(d=>d.id===other);const mode=$('#compareMode').value;const sourceExt=source?.filename.split('.').pop().toLowerCase();const targetExt=target?.filename.split('.').pop().toLowerCase();if(mode==='pdf-pdf'&&(sourceExt!=='pdf'||targetExt!=='pdf')){$('#compareResult').textContent='PDF-to-PDF mode requires two PDF documents.';return}if(mode==='pdf-excel'&&(sourceExt!=='pdf'||!['xls','xlsx','csv'].includes(targetExt))){$('#compareResult').textContent='PDF-to-Excel mode requires a PDF and an XLS, XLSX, or CSV document.';return}const response=await fetch(`/api/documents/${selected}/compare/${other}`);const data=await response.json();if(!response.ok){$('#compareResult').textContent=data.detail||'Comparison failed.';return}$('#compareResult').textContent=data.match?'Documents match on all available invoice fields.':`${data.mismatches.length} mismatch${data.mismatches.length===1?'':'es'} found: `+data.mismatches.map(m=>`${m.field} (${m.left} vs ${m.right})`).join(', ')}
+$('#uploadButton').addEventListener('click',upload);$('#refreshButton').addEventListener('click',load);$('#compareButton').addEventListener('click',compare);$('#closeReview').addEventListener('click',()=>{$('#detail').hidden=true;selected=null;load()});$('#search').addEventListener('input',load);$('#rows').addEventListener('click',event=>{const retryButton=event.target.closest('[data-retry-id]');if(retryButton){retry(retryButton.dataset.retryId).catch(error=>setMessage(error.message,'error'));return}const link=event.target.closest('[data-document-id]');if(link){event.preventDefault();show(link.dataset.documentId)}});load();refreshTimer=setInterval(load,3000);
+</script>
+</body>
+</html>
