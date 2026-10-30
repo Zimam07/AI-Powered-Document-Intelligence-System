@@ -2,6 +2,8 @@ import json
 import re
 from math import sqrt
 import sqlite3
+from contextlib import contextmanager
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from typing import Any
 from .config import DB_PATH, ensure_directories
@@ -9,13 +11,19 @@ from .config import DB_PATH, ensure_directories
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def connect() -> sqlite3.Connection:
+@contextmanager
+def connect() -> Iterator[sqlite3.Connection]:
     ensure_directories()
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 def init_db() -> None:
     with connect() as db:

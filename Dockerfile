@@ -8,7 +8,8 @@ RUN apt-get update \
 COPY app app
 COPY web web
 COPY scripts scripts
-COPY README.md ARCHITECTURE.md PROMPTS.md ./
+COPY evaluation evaluation
+COPY README.md ARCHITECTURE.md PROMPTS.md EVALUATION.md REQUIREMENTS_REVIEW.md ./
 ENV DATA_DIR=/app/data
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

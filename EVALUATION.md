@@ -22,3 +22,5 @@ pytest -q
 ```
 
 The latest expanded suite includes automated OCR and corrupt-PDF tests, plus an opt-in 1,000-page test. Native OCR is exercised by a generated-PNG test when Tesseract is installed.
+
+Failures count against field accuracy rather than being excluded from the denominator. The evaluation command exits nonzero for missing/empty labels, extraction failures, or mismatched labeled fields. Timing includes failed attempts. Run details are in [VERIFICATION.md](./VERIFICATION.md).

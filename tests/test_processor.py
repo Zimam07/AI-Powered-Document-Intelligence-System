@@ -1,4 +1,5 @@
 import io
+import pytest
 from app.processor import compare_invoices, extract_invoice, extract_text, validate_invoice
 
 SAMPLE = """Invoice Number: INV-100
@@ -85,3 +86,51 @@ def test_duplicate_word_in_supplier_is_not_a_duplicate_signal():
 def test_comparison_includes_line_items():
     errors = compare_invoices({"line_items": [{"amount": 1}]}, {"line_items": [{"amount": 2}]})
     assert errors == [{"field": "line_items", "left": "different", "right": "different"}]
+
+
+def test_blank_label_does_not_capture_next_line():
+    invoice, _ = extract_invoice("Invoice Number:\nInvoice Date: 2026-10-30\nTotal:\nTax: 5")
+    assert invoice["invoice_number"] is None
+    assert invoice["total"] is None
+
+
+def test_sub_total_is_not_mistaken_for_total():
+    invoice, _ = extract_invoice("Sub-total: 100\nTax: 15\nTotal: 115")
+    assert invoice["subtotal"] == 100
+    assert invoice["total"] == 115
+
+
+@pytest.mark.parametrize("amount", ["12.345", "1,23.00", "NaN", "Infinity", "12abc"])
+def test_malformed_money_is_not_truncated(amount):
+    invoice, _ = extract_invoice(f"Total: {amount}")
+    assert invoice["total"] is None
+
+
+def test_blank_structured_values_remain_unknown():
+    invoice, _ = extract_invoice("invoice number | invoice date | total | tax\nA | 2026-10-30 | | 5")
+    assert invoice["total"] is None
+
+
+def test_comparison_detects_missing_field():
+    assert compare_invoices({"total": 100}, {"total": None}) == [
+        {"field": "total", "left": "100", "right": "None"}]
+
+
+def test_dollar_sign_does_not_invent_currency():
+    invoice, _ = extract_invoice("Subtotal: $100\nTax: $15\nTotal: $115")
+    assert invoice["total"] == 115
+    assert invoice["currency"] is None
+
+
+def test_partial_csv_headers_extract_available_values():
+    text, _ = extract_text(b"invoice_number,total\nPARTIAL-1,12.50", ".csv")
+    invoice, _ = extract_invoice(text)
+    assert invoice["invoice_number"] == "PARTIAL-1"
+    assert invoice["total"] == 12.5
+    assert invoice["invoice_date"] is None
+
+
+@pytest.mark.parametrize("amount", ["NaN", "Infinity", "1,23", "12.345"])
+def test_structured_invalid_money_stays_unknown(amount):
+    invoice, _ = extract_invoice(f"invoice_number | total\nA | {amount}")
+    assert invoice["total"] is None

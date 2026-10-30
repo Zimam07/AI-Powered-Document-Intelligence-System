@@ -1,9 +1,9 @@
 import csv
 import hashlib
 import io
+import math
 import re
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
 from typing import Any
 from .config import TESSERACT_CMD
 
@@ -31,28 +31,33 @@ def _ocr_pdf(data: bytes, page_indexes: list[int] | None = None) -> tuple[list[s
         import pytesseract
         if TESSERACT_CMD:
             pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
-        pdf = fitz.open(stream=data, filetype="pdf")
-        pages = []
-        targets = set(page_indexes) if page_indexes is not None else set(range(len(pdf)))
-        for index, page in enumerate(pdf):
-            if index not in targets:
-                continue
-            pixels = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-            image = Image.frombytes("RGB", [pixels.width, pixels.height], pixels.samples)
-            pages.append(pytesseract.image_to_string(image))
-        return pages, len(pdf)
+        with fitz.open(stream=data, filetype="pdf") as pdf:
+            pages = []
+            targets = set(page_indexes) if page_indexes is not None else set(range(len(pdf)))
+            for index, page in enumerate(pdf):
+                if index not in targets:
+                    continue
+                pixels = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                with Image.frombytes("RGB", [pixels.width, pixels.height], pixels.samples) as image:
+                    pages.append(pytesseract.image_to_string(image))
+            return pages, len(pdf)
     except Exception as exc:
         raise ValueError(f"Scanned PDF OCR unavailable or failed: {exc}") from exc
 
 def _text_from_image(data: bytes) -> tuple[str, int]:
     try:
-        from PIL import Image, ImageOps
+        from PIL import Image, ImageOps, ImageSequence
         import pytesseract
         if TESSERACT_CMD:
             pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
-        image = Image.open(io.BytesIO(data)).convert("RGB")
-        image = ImageOps.autocontrast(image.resize((image.width * 2, image.height * 2)))
-        return pytesseract.image_to_string(image), 1
+        pages = []
+        with Image.open(io.BytesIO(data)) as source:
+            for frame in ImageSequence.Iterator(source):
+                with frame.convert("RGB") as image:
+                    with image.resize((image.width * 2, image.height * 2)) as enlarged:
+                        with ImageOps.autocontrast(enlarged) as prepared:
+                            pages.append(pytesseract.image_to_string(prepared))
+        return "\n".join(pages), len(pages)
     except Exception as exc:
         raise ValueError(f"Image OCR unavailable or failed: {exc}") from exc
 
@@ -69,7 +74,9 @@ def _text_from_sheet(data: bytes, suffix: str) -> tuple[str, int]:
                 chunks.append(f"[Sheet: {sheet.name}]")
                 for row_index in range(sheet.nrows):
                     chunks.append(" | ".join(str(value) for value in sheet.row_values(row_index)))
-            return "\n".join(chunks), workbook.nsheets
+            count = workbook.nsheets
+            workbook.release_resources()
+            return "\n".join(chunks), count
         from openpyxl import load_workbook
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         chunks = []
@@ -77,7 +84,9 @@ def _text_from_sheet(data: bytes, suffix: str) -> tuple[str, int]:
             chunks.append(f"[Sheet: {sheet.title}]")
             for row in sheet.iter_rows(values_only=True):
                 chunks.append(" | ".join("" if value is None else str(value) for value in row))
-        return "\n".join(chunks), len(workbook.worksheets)
+        count = len(workbook.worksheets)
+        workbook.close()
+        return "\n".join(chunks), count
     except Exception as exc:
         raise ValueError(f"Spreadsheet parsing failed: {exc}") from exc
 
@@ -90,20 +99,21 @@ def extract_text(data: bytes, suffix: str) -> tuple[str, int]:
         return _text_from_sheet(data, suffix)
     raise ValueError(f"Unsupported file extension: {suffix}")
 
-MONEY = r"(?P<value>[-+]?\d[\d,]*(?:\.\d{1,2})?)"
+MONEY = r"(?P<value>[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)(?![\w.,])"
 def _money(text: str, labels: list[str]) -> float | None:
     for label in labels:
-        match = re.search(rf"(?<!\w)(?:{label})(?:\s*[:#.\-|]\s*|\s+)\$?\s*{MONEY}", text, re.I)
+        match = re.search(rf"(?<![\w-])(?:{label})(?:[ \t]*[:#.|][ \t]*|[ \t]+)\$?[ \t]*{MONEY}", text, re.I)
         if match:
             try:
-                return float(match.group("value").replace(",", ""))
+                value = float(match.group("value").replace(",", ""))
+                return value if math.isfinite(value) else None
             except ValueError:
                 return None
     return None
 
 def _field(text: str, labels: list[str]) -> str | None:
     for label in labels:
-        match = re.search(rf"(?<!\w)(?:{label})(?:\s*[:#.\-|]\s*|\s+)(.+)", text, re.I)
+        match = re.search(rf"(?<!\w)(?:{label})(?:[ \t]*[:#.\-|][ \t]*|[ \t]+)([^\r\n]+)", text, re.I)
         if match:
             value = match.group(1).splitlines()[0].strip()
             return value or None
@@ -112,7 +122,9 @@ def _field(text: str, labels: list[str]) -> str | None:
 def _structured_invoice(text: str) -> dict[str, Any]:
     for line_number, line in enumerate(text.splitlines()):
         headers = [part.strip().lower().replace("_", " ") for part in line.split("|")]
-        if not {"invoice number", "invoice date"}.issubset(headers):
+        known_headers = {"invoice number", "invoice date", "supplier name", "customer name",
+                         "subtotal", "tax", "total", "currency"}
+        if len(known_headers.intersection(headers)) < 2:
             continue
         data_lines = text.splitlines()[line_number + 1:]
         data = next((candidate for candidate in data_lines if "|" in candidate and candidate.strip()), None)
@@ -137,8 +149,12 @@ def _structured_invoice(text: str) -> dict[str, Any]:
 def _parse_money_value(value: str | None) -> float | None:
     if not value:
         return None
+    value = value.strip().removeprefix("$").strip()
+    if not re.fullmatch(MONEY, value):
+        return None
     try:
-        return float(value.replace(",", "").replace("$", "").strip())
+        parsed = float(value.replace(",", "").replace("$", "").strip())
+        return parsed if math.isfinite(parsed) else None
     except ValueError:
         return None
 
@@ -151,10 +167,10 @@ def extract_invoice(text: str) -> tuple[dict[str, Any], float]:
         "subtotal": _money(text, [r"subtotal", r"sub-total"]),
         "tax": _money(text, [r"tax", r"vat"]),
         "total": _money(text, [r"grand\s*total", r"total\s*amount", r"total"]),
-        "currency": (_field(text, [r"currency"]) or ("USD" if "$" in text else None)),
+        "currency": _field(text, [r"currency"]),
         "line_items": [],
     }
-    invoice.update({key: value for key, value in _structured_invoice(text).items() if value is not None})
+    invoice.update(_structured_invoice(text))
     for line in text.splitlines():
         match = re.match(r"\s*(\d+)\s*[|,\t]\s*(.+?)\s*[|\],\t]\s*(\d+(?:\.\d+)?)\s*[|\],\t]\s*\$?([\d,]+(?:\.\d{1,2})?)\s*$", line)
         if match:
@@ -165,7 +181,8 @@ def extract_invoice(text: str) -> tuple[dict[str, Any], float]:
 
 def _decimal(value: Any) -> Decimal | None:
     try:
-        return Decimal(str(value))
+        parsed = Decimal(str(value))
+        return parsed if parsed.is_finite() else None
     except (InvalidOperation, TypeError, ValueError):
         return None
 
@@ -186,10 +203,19 @@ def validate_invoice(invoice: dict[str, Any], text: str, document_hash: str | No
     if subtotal is not None and tax is not None and total is not None and abs(subtotal + tax - total) > Decimal("0.02"):
         errors.append({"code": "total_mismatch", "message": "Subtotal plus tax does not equal total", "severity": "error"})
     line_total = Decimal(0)
-    for index, item in enumerate(invoice.get("line_items", [])):
+    line_items = invoice.get("line_items", [])
+    if not isinstance(line_items, list):
+        errors.append({"code": "invalid_line_item", "message": "line_items must be an array", "severity": "error"})
+        line_items = []
+    for index, item in enumerate(line_items):
+        if not isinstance(item, dict):
+            errors.append({"code": "invalid_line_item", "message": f"Line item {index + 1} must be an object", "severity": "error"})
+            continue
         amount = _decimal(item.get("amount"))
         quantity = _decimal(item.get("quantity"))
         unit_price = _decimal(item.get("unit_price"))
+        if quantity is None or unit_price is None:
+            errors.append({"code": "invalid_line_item", "message": f"Line item {index + 1} quantity and unit price must be numeric", "severity": "error"})
         if amount is None:
             errors.append({"code": "invalid_line_item", "message": f"Line item {index + 1} amount must be numeric", "severity": "error"})
             continue
@@ -198,7 +224,7 @@ def validate_invoice(invoice: dict[str, Any], text: str, document_hash: str | No
         line_total += amount
         if quantity is not None and unit_price is not None and abs(quantity * unit_price - amount) > Decimal("0.02"):
             errors.append({"code": "line_item_math_mismatch", "message": f"Line item {index + 1} quantity times unit price does not equal amount", "severity": "error"})
-    if invoice.get("line_items") and subtotal is not None and abs(line_total - subtotal) > Decimal("0.02"):
+    if line_items and subtotal is not None and abs(line_total - subtotal) > Decimal("0.02"):
         errors.append({"code": "line_items_mismatch", "message": "Line item amounts do not equal subtotal", "severity": "error"})
     return errors
 
@@ -206,8 +232,8 @@ def compare_invoices(left: dict[str, Any], right: dict[str, Any]) -> list[dict[s
     mismatches = []
     for field in ("invoice_number", "invoice_date", "supplier_name", "customer_name",
                   "subtotal", "tax", "total", "currency"):
-        if left.get(field) is not None and right.get(field) is not None and left[field] != right[field]:
-            mismatches.append({"field": field, "left": str(left[field]), "right": str(right[field])})
+        if left.get(field) != right.get(field):
+            mismatches.append({"field": field, "left": str(left.get(field)), "right": str(right.get(field))})
     if left.get("line_items") != right.get("line_items"):
         mismatches.append({"field": "line_items", "left": "different", "right": "different"})
     return mismatches

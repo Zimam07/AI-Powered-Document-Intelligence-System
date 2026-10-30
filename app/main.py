@@ -2,11 +2,12 @@ import asyncio
 import json
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from .config import (ALLOWED_EXTENSIONS, ALLOWED_ORIGINS, API_KEY, MALWARE_SIGNATURES,
                      MAX_UPLOAD_BYTES, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW_SECONDS,
@@ -16,12 +17,18 @@ from .db import (connect, document_row, has_duplicate_hash, has_duplicate_invoic
                  update_invoice_review)
 from .processor import compare_invoices, extract_invoice, extract_text, sha256, validate_invoice
 
-app = FastAPI(title="Document Intelligence API", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET", "POST", "PATCH"],
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ensure_directories()
+    init_db()
+    yield
+
+
+app = FastAPI(title="Document Intelligence API", version="1.0.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET", "POST", "PATCH", "DELETE"],
                    allow_headers=["Content-Type", "X-API-Key", "X-User-Role"], max_age=600)
 jobs: dict[str, asyncio.Task[None]] = {}
 request_windows: dict[str, list[float]] = {}
-init_db()
 
 class Correction(BaseModel):
     invoice: dict[str, Any] = Field(..., description="Corrected invoice JSON")
@@ -47,15 +54,11 @@ async def rate_limit(request: Request, call_next):
     now_value = time.monotonic()
     window = [stamp for stamp in request_windows.get(identity, []) if now_value - stamp < RATE_LIMIT_WINDOW_SECONDS]
     if len(window) >= RATE_LIMIT_REQUESTS:
-        raise HTTPException(429, "Rate limit exceeded; try again later")
+        return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded; try again later"},
+                            headers={"Retry-After": str(RATE_LIMIT_WINDOW_SECONDS)})
     window.append(now_value)
     request_windows[identity] = window
     return await call_next(request)
-
-@app.on_event("startup")
-def startup() -> None:
-    ensure_directories()
-    init_db()
 
 async def process(document_id: str, path: Path, suffix: str) -> None:
     try:
@@ -94,15 +97,21 @@ async def upload_documents(background: BackgroundTasks, files: list[UploadFile] 
     if not files:
         raise HTTPException(400, "At least one file is required")
     accepted = []
+    prepared = []
     for upload in files:
         suffix = Path(upload.filename or "").suffix.lower()
         if suffix not in ALLOWED_EXTENSIONS:
             raise HTTPException(415, f"Unsupported file type: {suffix or 'unknown'}")
-        data = await upload.read()
+        data = await upload.read(MAX_UPLOAD_BYTES + 1)
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, f"{upload.filename} exceeds the upload limit")
+        if not data:
+            raise HTTPException(422, f"{upload.filename} is empty")
         if any(signature.lower() in data.lower() for signature in MALWARE_SIGNATURES):
             raise HTTPException(422, f"{upload.filename} was rejected by the malware content scan")
+        prepared.append((upload, suffix, data))
+    # Reject invalid batches before persisting any file or queued job.
+    for upload, suffix, data in prepared:
         document_id = f"doc_{uuid.uuid4().hex}"
         path = UPLOAD_DIR / f"{document_id}{suffix}"
         path.write_bytes(data)
@@ -135,14 +144,46 @@ def document(document_id: str, _: str = Depends(require_api_access)) -> dict[str
 @app.post("/api/documents/{document_id}/reprocess", status_code=202)
 def reprocess(document_id: str, background: BackgroundTasks,
               _: str = Depends(require_admin)) -> dict[str, str]:
-    row = document_row(document_id)
-    if not row:
-        raise HTTPException(404, "Document not found")
-    path = next(UPLOAD_DIR.glob(f"{document_id}.*"), None)
-    if not path:
-        raise HTTPException(410, "Original upload is no longer available")
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Document not found")
+        if row["status"] in {"queued", "processing"}:
+            raise HTTPException(409, "Document is already queued or processing")
+        root = UPLOAD_DIR.resolve()
+        path = (root / f"{document_id}{Path(row['filename']).suffix.lower()}").resolve()
+        if path.parent != root or not path.is_file():
+            raise HTTPException(410, "Original upload is no longer available")
+        timestamp = now()
+        db.execute("UPDATE documents SET status='queued',error=NULL,progress=0,stage='queued',updated_at=? WHERE id=?",
+                   (timestamp, document_id))
+        db.execute("INSERT INTO processing_history(document_id,status,created_at) VALUES(?,?,?)",
+                   (document_id, "queued", timestamp))
     background.add_task(schedule, document_id, path, path.suffix.lower())
     return {"id": document_id, "status": "queued"}
+
+@app.delete("/api/documents/{document_id}", status_code=204)
+def delete_document(document_id: str, _: str = Depends(require_admin)) -> Response:
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Document not found")
+        if row["status"] in {"queued", "processing"}:
+            raise HTTPException(409, "Wait for processing to finish before deleting this document")
+        upload_root = UPLOAD_DIR.resolve()
+        path = (upload_root / f"{document_id}{Path(row['filename']).suffix.lower()}").resolve()
+        if path.parent != upload_root:
+            raise HTTPException(409, "Stored upload path is invalid")
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise HTTPException(500, "Could not remove the uploaded file; please try again") from exc
+        # Foreign-key cascades remove extracted text, invoices, errors and history.
+        db.execute("DELETE FROM documents WHERE id=?", (document_id,))
+    return Response(status_code=204)
+
 
 @app.get("/api/documents/{left_id}/compare/{right_id}")
 def compare_documents(left_id: str, right_id: str, _: str = Depends(require_api_access)) -> dict[str, Any]:
@@ -150,7 +191,8 @@ def compare_documents(left_id: str, right_id: str, _: str = Depends(require_api_
     right = result(right_id)
     if not left or not right:
         raise HTTPException(404, "Both documents must exist")
-    if not left["invoice"] or not right["invoice"]:
+    if (left["document"]["status"] != "completed" or right["document"]["status"] != "completed"
+            or not left["invoice"] or not right["invoice"]):
         raise HTTPException(409, "Both documents must finish processing before comparison")
     mismatches = compare_invoices(left["invoice"], right["invoice"])
     return {"match": not mismatches, "mismatches": mismatches, "left_id": left_id, "right_id": right_id}
@@ -161,6 +203,12 @@ def correct_invoice(document_id: str, correction: Correction,
     row = document_row(document_id)
     if not row:
         raise HTTPException(404, "Document not found")
+    if row["status"] != "completed":
+        raise HTTPException(409, "Document must finish processing before correction")
+    try:
+        json.dumps(correction.invoice, allow_nan=False)
+    except ValueError as exc:
+        raise HTTPException(422, "Invoice numbers must be finite JSON values") from exc
     with connect() as db:
         text_row = db.execute("SELECT text FROM extracted_text WHERE document_id=?", (document_id,)).fetchone()
     errors = validate_invoice(correction.invoice, text_row["text"] if text_row else "")

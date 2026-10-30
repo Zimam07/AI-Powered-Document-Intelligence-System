@@ -1,0 +1,65 @@
+name: Project checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.14']
+    env:
+      RUN_LARGE_PDF_TESTS: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install OCR and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
+          python -m pip install -r requirements.txt
+          python -m pip check
+      - name: Unit and API checks, including OCR and 1,000-page PDF
+        run: python -m pytest -q
+      - name: Labeled extraction evaluation
+        run: python scripts/evaluate.py
+      - name: Chromium setup
+        if: matrix.python == '3.12'
+        run: |
+          python -m pip install 'playwright>=1.57,<2'
+          python -m playwright install --with-deps chromium
+      - name: Browser workflows with and without an API key
+        if: matrix.python == '3.12'
+        run: |
+          python scripts/check_browser.py
+          python scripts/check_browser.py --authenticated
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Build and start container
+        run: |
+          docker build -t document-intelligence .
+          docker run -d --name document-intelligence -p 8000:8000 document-intelligence
+      - name: Check server and OCR installation
+        run: |
+          curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:8000/health
+          curl --fail http://127.0.0.1:8000/ > /dev/null
+          docker exec document-intelligence tesseract --version
+      - name: Container logs
+        if: always()
+        run: docker logs document-intelligence
