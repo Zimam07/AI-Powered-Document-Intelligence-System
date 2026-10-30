@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -47,7 +47,7 @@ jobs:
           python scripts/check_browser.py --authenticated
 
   container:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -57,7 +57,7 @@ jobs:
           docker run -d --name document-intelligence -p 8000:8000 document-intelligence
       - name: Check server and OCR installation
         run: |
-          curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:8000/health
+          curl --fail --retry 20 --retry-all-errors --retry-delay 1 --max-time 5 http://127.0.0.1:8000/health
           curl --fail http://127.0.0.1:8000/ > /dev/null
           docker exec document-intelligence tesseract --version
       - name: Container logs
