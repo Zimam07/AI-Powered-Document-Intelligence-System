@@ -115,7 +115,9 @@ def main():
                 expect(page.locator("#rows tr")).to_have_count(1)
                 expect(page.locator("#rows")).to_contain_text("browser-one.csv")
                 page.set_viewport_size({"width": 390, "height": 844})
-                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), page.evaluate(
+                    "({viewport:innerWidth, page:document.documentElement.scrollWidth, "
+                    "panels:[...document.querySelectorAll('.panel')].map(el=>({id:el.id,width:el.scrollWidth}))})")
                 page.locator("#closeReview").click()
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 page.set_viewport_size({"width": 1280, "height": 900})

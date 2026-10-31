@@ -26,6 +26,10 @@ a{color:var(--brand)}.sr-only{clip:rect(0 0 0 0);clip-path:inset(50%);height:1px
 @media(max-width:800px){.upload-layout,.topbar{align-items:stretch;flex-direction:column}.upload-layout .primary{width:100%}.summary-grid{grid-template-columns:repeat(2,1fr)}.review-grid{grid-template-columns:1fr}}
 @media(max-width:480px){.app-shell{padding:22px 14px 42px}.panel{padding:18px}.summary-grid{grid-template-columns:1fr 1fr}.summary-value{font-size:21px}.toolbar{align-items:stretch}.search-field{min-width:100%}.review-actions{align-items:stretch;flex-direction:column}.review-actions button{width:100%}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+.review-grid>*{min-width:0}.review-meta,.error-list,.compare-result{overflow-wrap:anywhere}
+.review-header>div{min-width:0}.compare-controls{flex-wrap:wrap}.compare-controls select{flex:1 1 160px;min-width:0;max-width:100%}
+.file-picker{min-width:0;flex-wrap:wrap}.file-picker input{min-width:0;width:100%}
+@media(max-width:800px){.review-grid{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
