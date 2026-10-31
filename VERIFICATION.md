@@ -1,4 +1,4 @@
-# Final local verification — 2026-10-31
+# Project verification — 2026-10-31
 
 Reviewed against the repository requirements; the feature-to-evidence mapping and explicit limitations are in [REQUIREMENTS_REVIEW.md](./REQUIREMENTS_REVIEW.md).
 
@@ -20,6 +20,10 @@ Tests use temporary databases and uploads. The legacy XLS fixture contains ficti
 ## Automated checks
 
 The GitHub Actions workflow runs the full suite on Python 3.12 and 3.14 with Tesseract installed, browser checks in both access modes, and a Docker build/start/health check. Docker is unavailable on the local Windows environment, so its build is verified by the GitHub container job rather than claimed as a local result. See the repository Actions page for the result of each published commit.
+
+The [verified run for application commit `bf0c608`](https://github.com/Zimam07/AI-Powered-Document-Intelligence-System/actions/runs/41178835909) completed successfully: Python 3.12, Python 3.14, and the container job all passed. This includes the Linux mobile-layout fix and both browser access modes. Earlier failed runs record issues fixed before this commit.
+
+The README badge links to [the latest checks on `main`](https://github.com/Zimam07/AI-Powered-Document-Intelligence-System/actions/workflows/ci.yml?query=branch%3Amain). GitHub publishing is verified separately from live hosting; the repository does not create a public application URL.
 
 ## Practical limits
 

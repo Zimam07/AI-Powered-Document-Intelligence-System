@@ -1,5 +1,9 @@
 # AI-Powered Document Intelligence System
 
+[![Project checks](https://github.com/Zimam07/AI-Powered-Document-Intelligence-System/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Zimam07/AI-Powered-Document-Intelligence-System/actions/workflows/ci.yml?query=branch%3Amain)
+
+The badge shows the latest checks on `main`. Open [build results](https://github.com/Zimam07/AI-Powered-Document-Intelligence-System/actions/workflows/ci.yml?query=branch%3Amain) and select the newest run; older failed runs remain in GitHub's history after fixes are published.
+
 Submission for the Senior AI Engineer assessment. The application ingests PDF, image, XLSX and CSV files, extracts invoice fields without inventing unknown values, validates financial consistency, stores processing history, and exposes a review/search UI.
 
 The default extractor is deterministic and runs offline; it does not call an LLM. See [requirements review](./REQUIREMENTS_REVIEW.md) for the implemented scope and [verification](./VERIFICATION.md) for measured checks.
