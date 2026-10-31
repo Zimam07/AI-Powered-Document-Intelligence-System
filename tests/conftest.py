@@ -1,4 +1,14 @@
 import pytest
+import os
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if report.failed and os.getenv("GITHUB_ACTIONS"):
+        details = report.longreprtext.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error title=Test failed::{details}", flush=True)
 
 
 @pytest.fixture(autouse=True)

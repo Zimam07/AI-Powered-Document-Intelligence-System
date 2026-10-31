@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import urllib.request
 
 from playwright.sync_api import sync_playwright, expect
@@ -146,4 +147,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        if os.getenv("GITHUB_ACTIONS"):
+            details = traceback.format_exc().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print(f"::error title=Browser workflow failed::{details}", flush=True)
+        raise
